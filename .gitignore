@@ -1,0 +1,7 @@
+*.rds
+dl/
+figures/
+tables/
+.Rhistory
+.RData
+.DS_Store
