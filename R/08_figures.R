@@ -32,21 +32,24 @@ f2 <- ggplot() +
   geom_errorbar(data = m1, aes(xmin = lo90, xmax = hi90, y = label), width = 0.25, orientation = "y", linewidth = 0.3) +
   geom_point(data = m1, aes(est, label), shape = 18, size = 3.2) +
   scale_size_area(max_size = 3, name = "Donors") +
-  labs(x = "Women minus men (donor-level SD units)", y = NULL,
+  labs(x = "Female minus male (donor-level SD units)", y = NULL,
        caption = "Diamonds: pooled estimate with 95% CI (thick) and 90% CI (thin). Grey band: equivalence bounds (±0.8 SD). Circles: single datasets.")
 save_fig(f2, "Figure2_capillary_programs", 95)
 
 # ---- Figure 3 ----
 f3a <- ggplot(A1$perm |> filter(program %in% PRIMARY) |> mutate(label = lab[program]), aes(p)) +
   geom_histogram(breaks = seq(0, 1, 0.05), fill = "grey70", colour = "white") +
+  geom_vline(xintercept = 0.05, linetype = 2, linewidth = 0.3) +
+  scale_x_continuous(breaks = c(0, 0.5, 1), labels = c("0", "0.5", "1")) +
+  theme(panel.spacing.x = unit(5, "mm"), strip.text = element_text(size = 7)) +
   facet_wrap(~ label, nrow = 1) + labs(x = "Meta-analysis p value, shuffled sex labels", y = "Permutations")
 g <- A1$gmeta; if (!"chr" %in% names(g)) g$chr <- NA
 g <- g |> mutate(cls = case_when(chr == "X" ~ "X", chr == "Y" ~ "Y", TRUE ~ "Autosome"))
 f3b <- ggplot(g, aes(logFC, -log10(p), colour = cls)) + geom_point(size = 0.5, alpha = 0.6) +
-  geom_text(data = g |> filter(FDR < 0.05) |> arrange(p) |> head(15), aes(label = gene), size = 2.2,
-            vjust = -0.6, show.legend = FALSE) +
+  geom_text(data = g |> filter(FDR < 0.05, cls != "Autosome"), aes(label = gene, hjust = ifelse(logFC > 0, 1.15, -0.15)), size = 2.2,
+            check_overlap = TRUE, show.legend = FALSE) +
   scale_colour_manual(values = c(Autosome = "grey60", X = W, Y = M), name = NULL) +
-  labs(x = "Women minus men (log2, pooled)", y = expression(-log[10]~p))
+  labs(x = "Female minus male (log2, pooled)", y = expression(-log[10]~p))
 save_fig(patchwork::wrap_plots(f3a, f3b, ncol = 1, heights = c(1, 1.6)) + patchwork::plot_annotation(tag_levels = "A"),
          "Figure3_calibration_genomewide", 150)
 
@@ -59,7 +62,7 @@ f4 <- ggplot(m2, aes(est, reorder(label, est))) +
   geom_vline(xintercept = 0, linewidth = 0.3) +
   geom_errorbar(aes(xmin = lo, xmax = hi), width = 0, orientation = "y", linewidth = 0.6) +
   geom_point(shape = 18, size = 3) + facet_grid(fam ~ ., scales = "free_y", space = "free_y") +
-  labs(x = "Women minus men (donor-level SD units)", y = NULL)
+  labs(x = "Female minus male (donor-level SD units)", y = NULL)
 save_fig(f4, "Figure4_structure_signaling", 90)
 
 # ---- Figure 5 ----
@@ -69,7 +72,7 @@ h <- A4$by_group |> filter(measure %in% c("X_only", "X_plus_Y")) |>
 f5 <- ggplot(h, aes(group, pair, fill = est)) + geom_tile(colour = "white") +
   geom_text(aes(label = paste0(sprintf("%+.2f", est), star)), size = 2.3) +
   facet_wrap(~ measure) +
-  scale_fill_gradient2(low = M, mid = "white", high = W, midpoint = 0, name = "Women - men\n(log2)") +
+  scale_fill_gradient2(low = M, mid = "white", high = W, midpoint = 0, name = "Female - male\n(log2)") +
   labs(x = NULL, y = NULL) + theme(axis.text.x = element_text(angle = 40, hjust = 1))
 save_fig(f5, "Figure5_XY_paralogs", 90)
 
@@ -79,6 +82,12 @@ write.csv(A1$main, "tables/Table2_aim1_programs.csv", row.names = FALSE)
 write.csv(A1$per_ds |> left_join(dsn, by = "dataset_id"), "tables/TableS_aim1_per_dataset.csv", row.names = FALSE)
 write.csv(A1$gmeta |> arrange(p), "tables/TableS_genomewide_meta.csv", row.names = FALSE)
 write.csv(bind_rows(A2$comp, A2$lr), "tables/Table3_aim2.csv", row.names = FALSE)
+write.csv(A1$sens, "tables/TableS_aim1_sensitivity.csv", row.names = FALSE)
+write.csv(A1$loo, "tables/TableS_aim1_leave_one_out.csv", row.names = FALSE)
+write.csv(A1$calib, "tables/TableS_aim1_calibration.csv", row.names = FALSE)
+write.csv(A2$comp_susp, "tables/TableS_aim2_by_suspension.csv", row.names = FALSE)
+write.csv(A4$yshare, "tables/TableS_aim4_Y_share.csv", row.names = FALSE)
+write.csv(readRDS("inv_donors.rds") |> filter(included) |> select(-dataset_id), "tables/TableS_donors.csv", row.names = FALSE)
 write.csv(bind_rows(A3$main, A3$sens), "tables/TableS_aim3_age.csv", row.names = FALSE)
 write.csv(A4$by_group, "tables/Table4_aim4_by_group.csv", row.names = FALSE)
 write.csv(A4$spec, "tables/TableS_aim4_specificity.csv", row.names = FALSE)

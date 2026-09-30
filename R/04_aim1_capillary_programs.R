@@ -14,7 +14,9 @@ P <- readRDS("pb.rds")
 cap <- P$mats$capillary
 S <- P$samples |> filter(n_capillary >= MIN_CAP, sample %in% colnames(cap))
 
-all_sets <- c(programs, pos_control, list(Stress = STRESS))
+# ambient heart-muscle RNA in the capillary pseudobulk (sensitivity covariate; added post hoc, see plan Deviations)
+CM_AMBIENT <- c("MYH7", "MYH6", "MYL2", "MYL3", "TNNT2", "TNNI3", "ACTC1", "MB", "TTN", "RYR2", "NPPA", "NPPB", "CKM", "COX6A2", "MYL7")
+all_sets <- c(programs, pos_control, list(Stress = STRESS, CM_ambient = CM_AMBIENT))
 
 # ---- 1. Per-dataset scores ----
 by_ds <- split(S, S$dataset_id)
@@ -46,8 +48,8 @@ cov_tab |> mutate(found = paste0(genes_found, "/", genes_total)) |> select(-gene
 
 # ---- 2. Fits and meta-analysis ----
 fit_all <- function(sc, sets, extra = NULL) {
-  bind_rows(lapply(sets, function(p) bind_rows(lapply(split(sc, sc$dataset_id), function(d) {
-    r <- sex_fit(d, p, extra); if (is.null(r)) NULL else mutate(r, dataset_id = d$dataset_id[1], program = p)
+  bind_rows(lapply(sets, function(prog) bind_rows(lapply(split(sc, sc$dataset_id), function(d) {
+    r <- sex_fit(d, prog, extra); if (is.null(r)) NULL else mutate(r, dataset_id = d$dataset_id[1], program = prog)
   }))))
 }
 run_meta <- function(per) per |> group_by(program) |> group_modify(~ meta_one(.x)) |> ungroup()
@@ -73,7 +75,21 @@ per_ds |> left_join(readRDS("inv_datasets.rds") |> select(dataset_id, dataset_ti
 scores <- scores |> mutate(log_ncap = log(n_capillary))
 sens <- bind_rows(
   run_meta(fit_all(scores, PRIMARY, "Stress")) |> mutate(analysis = "+ stress score"),
-  run_meta(fit_all(scores, PRIMARY, "log_ncap")) |> mutate(analysis = "+ log capillary cells"))
+  run_meta(fit_all(scores, PRIMARY, "log_ncap")) |> mutate(analysis = "+ log capillary cells"),
+  run_meta(fit_all(scores, PRIMARY, "CM_ambient")) |> mutate(analysis = "+ heart-muscle ambient RNA score"),
+  run_meta(fit_all(scores, PRIMARY, c("Stress", "CM_ambient"))) |> mutate(analysis = "+ stress + ambient RNA"))
+
+# Sensitivity (added before outcome analysis, after the subtype check): capillaries as labeled by each atlas
+cap_a <- P$mats$capillary_atlas
+Sa <- P$samples |> filter(n_capillary_atlas >= MIN_CAP, sample %in% colnames(cap_a))
+scores_a <- bind_rows(lapply(split(Sa, Sa$dataset_id), function(d) {
+  if (sum(d$sex == "female") < MIN_PER_SEX || sum(d$sex == "male") < MIN_PER_SEX) return(NULL)
+  y <- DGEList(cap_a[, d$sample, drop = FALSE])
+  y <- calcNormFactors(y[filterByExpr(y, group = d$sex), , keep.lib.sizes = FALSE])
+  lc <- cpm(y, log = TRUE, prior.count = 1)
+  bind_cols(d, as_tibble(sapply(programs, function(g) prog_score(lc, g))))
+}))
+sens <- bind_rows(sens, run_meta(fit_all(scores_a, PRIMARY)) |> mutate(analysis = "atlas capillary labels"))
 loo <- bind_rows(lapply(names(by_ds), function(k)
   run_meta(per_ds |> filter(dataset_id != k, program %in% PRIMARY)) |> mutate(left_out = k)))
 cat("\n== Sensitivity analyses ==\n")
