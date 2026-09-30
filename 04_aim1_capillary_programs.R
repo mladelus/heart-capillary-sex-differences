@@ -74,6 +74,18 @@ scores <- scores |> mutate(log_ncap = log(n_capillary))
 sens <- bind_rows(
   run_meta(fit_all(scores, PRIMARY, "Stress")) |> mutate(analysis = "+ stress score"),
   run_meta(fit_all(scores, PRIMARY, "log_ncap")) |> mutate(analysis = "+ log capillary cells"))
+
+# Sensitivity (added before outcome analysis, after the subtype check): capillaries as labeled by each atlas
+cap_a <- P$mats$capillary_atlas
+Sa <- P$samples |> filter(n_capillary_atlas >= MIN_CAP, sample %in% colnames(cap_a))
+scores_a <- bind_rows(lapply(split(Sa, Sa$dataset_id), function(d) {
+  if (sum(d$sex == "female") < MIN_PER_SEX || sum(d$sex == "male") < MIN_PER_SEX) return(NULL)
+  y <- DGEList(cap_a[, d$sample, drop = FALSE])
+  y <- calcNormFactors(y[filterByExpr(y, group = d$sex), , keep.lib.sizes = FALSE])
+  lc <- cpm(y, log = TRUE, prior.count = 1)
+  bind_cols(d, as_tibble(sapply(programs, function(g) prog_score(lc, g))))
+}))
+sens <- bind_rows(sens, run_meta(fit_all(scores_a, PRIMARY)) |> mutate(analysis = "atlas capillary labels"))
 loo <- bind_rows(lapply(names(by_ds), function(k)
   run_meta(per_ds |> filter(dataset_id != k, program %in% PRIMARY)) |> mutate(left_out = k)))
 cat("\n== Sensitivity analyses ==\n")

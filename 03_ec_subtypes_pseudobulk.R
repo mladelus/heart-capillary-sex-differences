@@ -59,6 +59,7 @@ stack_vecs <- function(vl) {                    # named count vectors -> genes x
 
 sid <- function(x) paste(substr(x$dataset_id, 1, 8), x$donor_id, sep = "|")
 ec_pb <- list(capillary = list(), arterial = list(), venous = list())
+atlas_cap <- list()
 other_pb <- list()
 n_tab <- list()
 for (x in dl) {
@@ -68,17 +69,21 @@ for (x in dl) {
     cols <- a$soma_joinid[which(a$subtype == st)]
     if (length(cols) >= MIN_CT) ec_pb[[st]][[s]] <- Matrix::rowSums(x$ec_counts[, cols, drop = FALSE])
   }
+  # sensitivity: capillary ECs as labeled by the original atlas
+  cols <- a$soma_joinid[which(a$cell_type == "capillary endothelial cell")]
+  if (length(cols) >= MIN_CT) atlas_cap[[s]] <- Matrix::rowSums(x$ec_counts[, cols, drop = FALSE])
   for (cl in setdiff(names(x$pb), c("blood EC", "other")))
     if (x$n_class[[cl]] >= MIN_CT) other_pb[[cl]][[s]] <- x$pb[[cl]]
   n_tab[[s]] <- tibble(sample = s, dataset_id = x$dataset_id, donor_id = x$donor_id,
                        n_cells = sum(x$n_class),
                        n_EC = sum(nrow(a)), n_capillary = sum(a$subtype == "capillary"),
+                       n_capillary_atlas = sum(a$cell_type == "capillary endothelial cell", na.rm = TRUE),
                        n_arterial = sum(a$subtype == "arterial"), n_venous = sum(a$subtype == "venous"),
                        n_pericyte = if ("pericyte" %in% names(x$n_class)) x$n_class[["pericyte"]] else 0L,
                        n_cardiomyocyte = if ("cardiomyocyte" %in% names(x$n_class)) x$n_class[["cardiomyocyte"]] else 0L,
                        n_fibroblast = if ("fibroblast" %in% names(x$n_class)) x$n_class[["fibroblast"]] else 0L)
 }
-mats <- c(lapply(ec_pb, stack_vecs), lapply(other_pb, stack_vecs))
+mats <- c(lapply(ec_pb, stack_vecs), list(capillary_atlas = stack_vecs(atlas_cap)), lapply(other_pb, stack_vecs))
 
 samples <- bind_rows(n_tab) |>
   left_join(donors |> select(dataset_id, donor_id, dataset_title, sex, age, age_decade, assay, suspension), by = c("dataset_id", "donor_id")) |>
