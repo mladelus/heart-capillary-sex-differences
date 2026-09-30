@@ -99,4 +99,4 @@ Cause of death, ischemic time, menopausal status, hormone therapy, medications a
 
 ## Deviations
 
-*(none yet)*
+1. **Added after the subtype check in script 03, before any outcome was analyzed:** a sensitivity analysis of Aim 1 using the capillary labels of each original atlas. The uniform marker rule agreed with the atlas capillary labels for 64–70% of cells, and most of the disagreements were cells the rule placed with venous ECs. The uniform rule remains primary.
